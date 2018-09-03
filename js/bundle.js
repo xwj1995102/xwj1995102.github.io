@@ -20909,7 +20909,9 @@ class App extends React.Component {
         super(props);
         this.state = {
             todosData: [],
-            inputVal: ''
+            inputVal: '',
+            view: 'all'
+
         };
         this.handleKeyDownPost = this.handleKeyDownPost.bind(this);
         this.onDestroy = this.onDestroy.bind(this);
@@ -20917,6 +20919,20 @@ class App extends React.Component {
         this.inputChange = this.inputChange.bind(this);
         this.toggleAll = this.toggleAll.bind(this);
         this.onToggle = this.onToggle.bind(this);
+        this.changeView = this.changeView.bind(this);
+        this.itemEditDone = this.itemEditDone.bind(this);
+    }
+    itemEditDone(todo, value) {
+        let { todosData } = this.state;
+        todosData = todosData.map(elt => {
+            if (todo.id === elt.id) {
+                elt.value = value;
+            }
+            return elt;
+        });
+    }
+    changeView(view) {
+        this.setState({ view });
     }
 
     handleKeyDownPost(ev) {
@@ -20993,19 +21009,30 @@ class App extends React.Component {
         this.setState({ todosData });
     }
     render() {
-        let { handleKeyDownPost, onDestroy, onClearCompleted, inputChange, toggleAll, onToggle } = this;
-        let { todosData, inputVal } = this.state;
+        let { handleKeyDownPost, onDestroy, onClearCompleted, inputChange, toggleAll, onToggle, changeView, itemEditDone } = this;
+        let { todosData, inputVal, view } = this.state;
         let items = null,
             footer = null,
             itemsBox = null;
         let leftCount = todosData.length;
-
-        items = todosData.map((elt, i) => {
+        items = todosData.filter(elt => {
             if (elt.hasCompleted) leftCount--;
+            switch (view) {
+                case 'active':
+                    return !elt.hasCompleted;
+                case 'completed':
+                    return elt.hasCompleted;
+                default:
+                    return true;
+            }
+        });
+        items = items.map((elt, i) => {
+
             return React.createElement(__WEBPACK_IMPORTED_MODULE_0__Item_jsx__["a" /* default */], _extends({
                 onDestroy,
                 todo: elt,
-                onToggle
+                onToggle,
+                itemEditDone
             }, {
                 key: i
             }));
@@ -21029,7 +21056,9 @@ class App extends React.Component {
             footer = React.createElement(__WEBPACK_IMPORTED_MODULE_1__Footer_jsx__["a" /* default */], {
                 leftCount,
                 showClearButton: leftCount < todosData.length,
-                onClearCompleted
+                onClearCompleted,
+                changeView,
+                view
             });
         }
         return React.createElement(
@@ -21074,36 +21103,89 @@ class App extends React.Component {
 /* WEBPACK VAR INJECTION */(function(PT, React) {let propTypes = {
     todo: PT.object,
     onDestroy: PT.func,
-    onToggle: PT.func
+    onToggle: PT.func,
+    itemEditDone: PT.func
     // console.log(PT.object)
 };class Item extends React.Component {
     constructor(props) {
         super(props);
+        this.state = {
+            inEdit: false,
+            val: ''
+        };
+        this.onEdit = this.onEdit.bind(this);
+        this.onBlur = this.onBlur.bind(this);
+        this.onEnter = this.onEnter.bind(this);
+        this.itemEditDone = this.itemEditDone.bind(this);
+        this.inputChange = this.inputChange.bind(this);
+    }
+    inputChange(ev) {
+        this.setState({
+            val: ev.target.value
+        });
+    }
+    itemEditDone() {
+        this.setState({
+            inEdit: false
+        });
+        let { itemEditDone, todo } = this.props;
+        itemEditDone(todo, this.state.val);
+    }
+    onBlur() {
+        this.itemEditDone();
+    }
+    onEnter(ev) {
+        if (ev.keyCode != 13) return;
+        this.itemEditDone();
+    }
+    onEdit() {
+        let { value } = this.props.todo;
+        this.setState({
+            inEdit: true,
+            val: value
+
+        }, () => this.refs.editInput.focus());
     }
     render() {
+        let { onEdit, onBlur, onEnter, inputChange } = this;
         let { todo, onDestroy, onToggle } = this.props;
+        let { inEdit, val } = this.state;
+        let itemClassName = todo.hasCompleted ? 'completed' : '';
+        if (inEdit) itemClassName += 'editing';
 
         return React.createElement(
-            "li",
-            null,
+            'li',
+            { className: itemClassName },
             React.createElement(
-                "div",
-                { className: "view" },
-                React.createElement("input", { type: "checkbox",
-                    className: "toggle",
+                'div',
+                { className: 'view' },
+                React.createElement('input', { type: 'checkbox',
+                    className: 'toggle',
                     checked: todo.hasCompleted,
                     onChange: ev => onToggle(todo)
                 }),
                 React.createElement(
-                    "label",
-                    null,
+                    'label',
+                    {
+                        onDoubleClick: onEdit,
+                        ref: 'label'
+                    },
                     todo.value
                 ),
-                React.createElement("button", { className: "destroy",
-                    onClick: ev => onDestroy(todo)
+                React.createElement('button', { className: 'destroy',
+                    onClick: ev => onDestroy(todo),
+                    ref: 'btn'
                 })
             ),
-            React.createElement("input", { type: "text", className: "edit" })
+            React.createElement('input', {
+                type: 'text',
+                className: 'edit',
+                value: val,
+                onBlur: onBlur,
+                onKeyDown: onEnter,
+                onChange: inputChange,
+                ref: 'editInput'
+            })
         );
     }
 }
@@ -21749,59 +21831,78 @@ module.exports = function() {
 /* WEBPACK VAR INJECTION */(function(PT, React) {let propTypes = {
     leftCount: PT.number,
     showClearButton: PT.bool,
-    onClearCompleted: PT.func
+    onClearCompleted: PT.func,
+    changeView: PT.func,
+    view: PT.oneOf(['all', 'active', 'completed'])
 };
 class Footer extends React.Component {
     constructor(props) {
         super(props);
     }
     render() {
-        let { leftCount, showClearButton, onClearCompleted } = this.props;
+        let {
+            leftCount,
+            showClearButton,
+            onClearCompleted,
+            changeView, view
+        } = this.props;
         let clearBtn = null;
         if (showClearButton) {
             clearBtn = React.createElement(
-                "button",
-                { className: "clear-completed", onClick: onClearCompleted },
-                "clear all completed"
+                'button',
+                { className: 'clear-completed', onClick: onClearCompleted },
+                'clear all completed'
             );
         }
         return React.createElement(
-            "footer",
-            { className: "footer" },
+            'footer',
+            { className: 'footer' },
             React.createElement(
-                "span",
-                { className: "todo-count" },
+                'span',
+                { className: 'todo-count' },
                 React.createElement(
-                    "strong",
+                    'strong',
                     null,
                     leftCount
                 ),
                 React.createElement(
-                    "span",
+                    'span',
                     null,
-                    "item left"
+                    'item left'
                 )
             ),
             React.createElement(
-                "ul",
-                { className: "filters" },
+                'ul',
+                { className: 'filters' },
                 React.createElement(
-                    "li",
+                    'li',
                     null,
                     React.createElement(
-                        "a",
-                        { href: "#/all" },
-                        "All"
+                        'a',
+                        {
+                            href: '#/all',
+                            className: view === 'all' ? 'selected' : '',
+                            onClick: ev => changeView('all')
+                        },
+                        'All'
                     ),
                     React.createElement(
-                        "a",
-                        { href: "#/active" },
-                        "Active"
+                        'a',
+                        {
+                            href: '#/active',
+                            className: view === 'active' ? 'selected' : '',
+                            onClick: ev => changeView('active')
+                        },
+                        'Active'
                     ),
                     React.createElement(
-                        "a",
-                        { href: "#/completed" },
-                        "Completed"
+                        'a',
+                        {
+                            href: '#/completed',
+                            className: view === 'completed' ? 'selected' : '',
+                            onClick: ev => changeView('completed')
+                        },
+                        'Completed'
                     )
                 )
             ),
